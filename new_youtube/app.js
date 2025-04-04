@@ -1,53 +1,68 @@
-const express = require('express');
-const fetch = require('node-fetch');
-const ytdl = require('@distube/ytdl-core');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
+import express from 'express';
+import { spawn } from 'child_process';
 
 const app = express();
-ffmpeg.setFfmpegPath(ffmpegPath);
 const PORT = process.env.PORT || 3000;
 
 app.set('view engine', 'ejs');
 app.use(express.static("public"));
-
-app.use(express.urlencoded({ extended:true}));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.get('/', (req, res) => {
     res.render("index");
 });
-app.post('/convert-mp3', async (req, res) => {
-    try{
-        const videoUrl = req.body.url;
-        if(!ytdl.validateURL(videoUrl)) {
-            return res.status(400).send('Wrong Youtube URL');
-        }
-        const info = await ytdl.getInfo(videoUrl);
-        const title = info.videoDetails.title.replace(/[^\w\s]/gi,'');
-        console.log(title);
-        res.header('Content-Disposition', `attachment; filename="${title}.mp3"`);
-        res.header('Content-Type','audio/mpeg');
 
-        const audioStream = ytdl(videoUrl,{quality:'highestaudio'});
-        const ffmpegCommand = ffmpeg(audioStream).audioBitrate(128).format('mp3')
-        ffmpegCommand.pipe(res,{end:true});
-        req.on('close', () => {
-            console.log('Client aborted download. Stopping FFmpeg...');
-            ffmpegCommand.kill('SIGKILL'); 
+app.post('/convert-mp3', async (req, res) => {
+    try {
+        const videoUrl = req.body.url;
+        const videoIdMatch = videoUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
+        if (!videoIdMatch) return res.status(400).send('Invalid YouTube URL');
+
+        const videoId = videoIdMatch[1];
+
+        // 🛠️ Get the video title
+        const titleProcess = spawn('yt-dlp', ['--print', '%(title)s', videoUrl]);
+
+        let videoTitle = '';
+        for await (const chunk of titleProcess.stdout) {
+            videoTitle += chunk.toString();
+        }
+
+        // Wait for the title process to finish
+        await new Promise((resolve) => titleProcess.on('close', resolve));
+
+        // 🧹 Clean title to make a safe filename
+        videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
+
+        if (!videoTitle) {
+            videoTitle = 'audio'; // Default if title extraction fails
+        }
+
+        res.header('Content-Disposition', `attachment; filename="${videoTitle}.mp3"`);
+        res.header('Content-Type', 'audio/mpeg');
+
+        // 🎵 Stream the audio in MP3 format
+        const process = spawn('yt-dlp', ['-f', 'bestaudio', '--audio-format', 'mp3', '-o', '-', videoUrl]);
+
+        process.stdout.pipe(res);
+
+        process.stderr.on('data', (data) => {
+            console.error(`yt-dlp error: ${data}`);
         });
-        ffmpegCommand.on('error', (err) => {
-            console.error('FFmpeg error:', err);
-            if (!res.headersSent) {
-                res.status(500).send('Conversion Failed');
+
+        process.on('close', (code) => {
+            if (code !== 0) {
+                res.status(500).send('Failed to process request');
             }
         });
-    } catch(error){
-        console.error('Error:',error);
+
+    } catch (error) {
+        console.error('Error:', error);
         res.status(500).send('Failed to process request');
     }
 });
 
-app.listen(PORT,()=>{
+app.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
 });
