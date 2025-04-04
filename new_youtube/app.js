@@ -1,6 +1,7 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import ytDlp from 'yt-dlp-exec'; 
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,10 +36,11 @@ app.post('/convert-mp3', async (req, res) => {
         res.header('Content-Type', 'audio/mpeg');
 
         // 🎵 Stream the audio as MP3
-        const process = spawn(ytDlp.path, [
+        const cookiesPath = '/etc/secrets/cookies.txt';
+
+        const process = spawn('yt-dlp', [
             '-f', 'bestaudio',
-            '--audio-format', 'mp3',
-            '--cookies', 'cookies.txt', // ✅ Use cookies to bypass restrictions
+            '--cookies', cookiesPath,  // ✅ Use the secret cookies file
             '-o', '-',
             videoUrl
         ]);
