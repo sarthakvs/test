@@ -1,6 +1,6 @@
 import express from 'express';
 import { spawn } from 'child_process';
-import ytDlp from 'yt-dlp-exec'; // ✅ Use yt-dlp-exec to ensure it's found
+import ytDlp from 'yt-dlp-exec'; 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,9 +22,10 @@ app.post('/convert-mp3', async (req, res) => {
 
         const videoId = videoIdMatch[1];
 
-        // 🛠️ Get the video title using yt-dlp-exec
+        // 🛠️ Get the video title using cookies
         let videoTitle = await ytDlp(videoUrl, {
             print: '%(title)s',
+            cookies: 'cookies.txt' // ✅ Pass YouTube cookies
         });
 
         // 🧹 Clean title for a safe filename
@@ -34,7 +35,13 @@ app.post('/convert-mp3', async (req, res) => {
         res.header('Content-Type', 'audio/mpeg');
 
         // 🎵 Stream the audio as MP3
-        const process = spawn(ytDlp.path, ['-f', 'bestaudio', '--audio-format', 'mp3', '-o', '-', videoUrl]);
+        const process = spawn(ytDlp.path, [
+            '-f', 'bestaudio',
+            '--audio-format', 'mp3',
+            '--cookies', 'cookies.txt', // ✅ Use cookies to bypass restrictions
+            '-o', '-',
+            videoUrl
+        ]);
 
         process.stdout.pipe(res);
 
