@@ -1,5 +1,6 @@
 import express from 'express';
 import { spawn } from 'child_process';
+import ytDlp from 'yt-dlp-exec'; // ✅ Use yt-dlp-exec to ensure it's found
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,29 +22,19 @@ app.post('/convert-mp3', async (req, res) => {
 
         const videoId = videoIdMatch[1];
 
-        // 🛠️ Get the video title
-        const titleProcess = spawn('yt-dlp', ['--print', '%(title)s', videoUrl]);
+        // 🛠️ Get the video title using yt-dlp-exec
+        let videoTitle = await ytDlp(videoUrl, {
+            print: '%(title)s',
+        });
 
-        let videoTitle = '';
-        for await (const chunk of titleProcess.stdout) {
-            videoTitle += chunk.toString();
-        }
-
-        // Wait for the title process to finish
-        await new Promise((resolve) => titleProcess.on('close', resolve));
-
-        // 🧹 Clean title to make a safe filename
-        videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-
-        if (!videoTitle) {
-            videoTitle = 'audio'; // Default if title extraction fails
-        }
+        // 🧹 Clean title for a safe filename
+        videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_') || 'audio';
 
         res.header('Content-Disposition', `attachment; filename="${videoTitle}.mp3"`);
         res.header('Content-Type', 'audio/mpeg');
 
-        // 🎵 Stream the audio in MP3 format
-        const process = spawn('yt-dlp', ['-f', 'bestaudio', '--audio-format', 'mp3', '-o', '-', videoUrl]);
+        // 🎵 Stream the audio as MP3
+        const process = spawn(ytDlp.path, ['-f', 'bestaudio', '--audio-format', 'mp3', '-o', '-', videoUrl]);
 
         process.stdout.pipe(res);
 
