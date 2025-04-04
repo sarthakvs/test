@@ -2,7 +2,8 @@ import express from 'express';
 import { spawn } from 'child_process';
 import ytDlp from 'yt-dlp-exec'; 
 import path from 'path';
-
+import fs from 'fs';
+import os from 'os';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -21,12 +22,15 @@ app.post('/convert-mp3', async (req, res) => {
         const videoIdMatch = videoUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
         if (!videoIdMatch) return res.status(400).send('Invalid YouTube URL');
 
-        const cookiesPath = '/etc/secrets/cookies.txt';
+        const secretCookiePath = '/etc/secrets/cookies.txt';
+        const tempCookiePath = path.join(os.tmpdir(), 'cookies.txt');
+        fs.copyFileSync(secretCookiePath, tempCookiePath);
+
 
         // Get clean video title
         let videoTitle = await ytDlp(videoUrl, {
             print: '%(title)s',
-            cookies: cookiesPath
+            cookies: tempCookiePath
         });
 
         videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_') || 'audio';
@@ -35,7 +39,7 @@ app.post('/convert-mp3', async (req, res) => {
         res.setHeader('Content-Type', 'audio/mpeg');
 
         const audioProc = spawn('yt-dlp', [
-            '--cookies', cookiesPath,
+            '--cookies', tempCookiePath,
             '-f', 'bestaudio',
             '-o', '-', // stream to stdout
             videoUrl
