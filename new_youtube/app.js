@@ -1,5 +1,4 @@
 import express from 'express';
-import { spawn } from 'child_process';
 import ytDlp from 'yt-dlp-exec'; 
 import path from 'path';
 import fs from 'fs';
@@ -26,8 +25,7 @@ app.post('/convert-mp3', async (req, res) => {
         const tempCookiePath = path.join(os.tmpdir(), 'cookies.txt');
         fs.copyFileSync(secretCookiePath, tempCookiePath);
 
-
-        // Get clean video title
+        // Get video title
         let videoTitle = await ytDlp(videoUrl, {
             print: '%(title)s',
             cookies: tempCookiePath
@@ -38,21 +36,23 @@ app.post('/convert-mp3', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${videoTitle}.mp3"`);
         res.setHeader('Content-Type', 'audio/mpeg');
 
-        const audioProc = spawn('yt-dlp', [
-            '--cookies', tempCookiePath,
-            '-f', 'bestaudio',
-            '-o', '-', // stream to stdout
-            videoUrl
-        ]);
-
-        audioProc.stdout.pipe(res);
-
-        audioProc.stderr.on('data', (data) => {
-            console.error(`yt-dlp error: ${data}`);
+        // Stream audio directly using yt-dlp-exec
+        const audioStream = ytDlp.exec(videoUrl, {
+            cookies: tempCookiePath,
+            format: 'bestaudio',
+            output: '-', // stream to stdout
+            quiet: true
         });
 
-        audioProc.on('close', (code) => {
+        audioStream.stdout.pipe(res);
+
+        audioStream.stderr.on('data', (data) => {
+            console.error(`yt-dlp stderr: ${data}`);
+        });
+
+        audioStream.on('close', (code) => {
             if (code !== 0) {
+                console.error(`yt-dlp process exited with code ${code}`);
                 res.status(500).send('Failed to download audio');
             }
         });
