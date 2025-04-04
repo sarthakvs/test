@@ -36,14 +36,14 @@ app.post('/convert-mp3', async (req, res) => {
         res.header('Content-Type', 'audio/mpeg');
 
         // 🎵 Stream the audio as MP3
-        const cookiesPath = './etc/secrets/cookies.txt';
+        const cookiesPath = '/etc/secrets/cookies.txt';
 
         const process = spawn('yt-dlp', [
-            '-f', 'bestaudio',
-            '--cookies', cookiesPath,  // ✅ Use the secret cookies file
-            '-o', '-',
+            '--cookies', cookiesPath,
+            '--print', '%(title)s',
             videoUrl
         ]);
+
 
         process.stdout.pipe(res);
 
