@@ -21,45 +21,41 @@ app.post('/convert-mp3', async (req, res) => {
         const videoIdMatch = videoUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
         if (!videoIdMatch) return res.status(400).send('Invalid YouTube URL');
 
-        const videoId = videoIdMatch[1];
-
-        // 🛠️ Get the video title using cookies
-        let videoTitle = await ytDlp(videoUrl, {
-            print: '%(title)s',
-            cookies: 'cookies.txt' // ✅ Pass YouTube cookies
-        });
-
-        // 🧹 Clean title for a safe filename
-        videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_') || 'audio';
-
-        res.header('Content-Disposition', `attachment; filename="${videoTitle}.mp3"`);
-        res.header('Content-Type', 'audio/mpeg');
-
-        // 🎵 Stream the audio as MP3
         const cookiesPath = '/etc/secrets/cookies.txt';
 
-        const process = spawn('yt-dlp', [
+        // Get clean video title
+        let videoTitle = await ytDlp(videoUrl, {
+            print: '%(title)s',
+            cookies: cookiesPath
+        });
+
+        videoTitle = videoTitle.trim().replace(/[^\w\s]/gi, '').replace(/\s+/g, '_') || 'audio';
+
+        res.setHeader('Content-Disposition', `attachment; filename="${videoTitle}.mp3"`);
+        res.setHeader('Content-Type', 'audio/mpeg');
+
+        const audioProc = spawn('yt-dlp', [
             '--cookies', cookiesPath,
-            '--print', '%(title)s',
+            '-f', 'bestaudio',
+            '-o', '-', // stream to stdout
             videoUrl
         ]);
 
+        audioProc.stdout.pipe(res);
 
-        process.stdout.pipe(res);
-
-        process.stderr.on('data', (data) => {
+        audioProc.stderr.on('data', (data) => {
             console.error(`yt-dlp error: ${data}`);
         });
 
-        process.on('close', (code) => {
+        audioProc.on('close', (code) => {
             if (code !== 0) {
-                res.status(500).send('Failed to process request');
+                res.status(500).send('Failed to download audio');
             }
         });
 
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).send('Failed to process request');
+        res.status(500).send('Something went wrong');
     }
 });
 
