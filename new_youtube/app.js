@@ -36,7 +36,7 @@ app.post('/convert-mp3', async (req, res) => {
         res.header('Content-Type', 'audio/mpeg');
 
         // 🎵 Stream the audio as MP3
-        const cookiesPath = './etc/secrets/cookies';
+        const cookiesPath = './etc/secrets/cookies.txt';
 
         const process = spawn('yt-dlp', [
             '-f', 'bestaudio',
